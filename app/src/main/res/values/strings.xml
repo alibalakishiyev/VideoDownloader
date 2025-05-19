@@ -2,6 +2,8 @@
     <string name="app_name">Video Downloader</string>
     <string-array name="platforms">
         <item>TikTok</item>
+        <item>Facebook</item>
+        <item>Reddit</item>
         <item>Instagram</item>
         <item>YouTube</item>
         <item>Pinterest</item>

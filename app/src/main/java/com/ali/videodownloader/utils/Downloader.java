@@ -20,6 +20,7 @@ import android.webkit.URLUtil;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.AdapterView;
@@ -87,27 +88,43 @@ public class Downloader extends AppCompatActivity {
                 return;
             }
 
-            if (selectedPlatform.equals("YouTube") || selectedPlatform.equals("Instagram")) {
-                // Reset WebView state
-                webView.clearCache(true);
-                webView.clearHistory();
+            progressBar.setVisibility(View.VISIBLE);
+            statusTextView.setText("Starting download...");
+            downloadButton.setEnabled(false);
 
-                // For YouTube/Instagram, use savefrom.net in WebView
-                String saveFromUrl = "https://en.savefrom.net/#url=" + videoUrl;
-                webView.setVisibility(View.VISIBLE);
-                webView.loadUrl(saveFromUrl);
-            } else {
-                // For other platforms, use normal downloader
-                BaseVideoDownloader downloader = DownloaderFactory.createDownloader(
-                        selectedPlatform,
-                        progressBar,
-                        statusTextView,
-                        downloadButton,
-                        this,
-                        webView
-                );
-                downloader.execute(videoUrl);
-            }
+            new Thread(() -> {
+                try {
+                    BaseVideoDownloader downloader = DownloaderFactory.createDownloader(
+                            selectedPlatform,
+                            progressBar,
+                            statusTextView,
+                            downloadButton,
+                            this,
+                            webView
+                    );
+
+                    String result = downloader.execute(videoUrl).get();
+
+                    runOnUiThread(() -> {
+                        progressBar.setVisibility(View.GONE);
+                        downloadButton.setEnabled(true);
+                        if (result.startsWith("Error")) {
+                            statusTextView.setText(result);
+                            Toast.makeText(this, result, Toast.LENGTH_LONG).show();
+                        } else {
+                            statusTextView.setText("Download completed!");
+                            Toast.makeText(this, "Video downloaded successfully", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                } catch (Exception e) {
+                    runOnUiThread(() -> {
+                        progressBar.setVisibility(View.GONE);
+                        downloadButton.setEnabled(true);
+                        statusTextView.setText("Error: " + e.getMessage());
+                        Toast.makeText(this, "Download failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    });
+                }
+            }).start();
         });
 
 
@@ -147,87 +164,163 @@ public class Downloader extends AppCompatActivity {
     private void setupWebView() {
         webView = findViewById(R.id.webBrowser);
 
+        // Enhanced WebView settings
+        WebSettings webSettings = webView.getSettings();
+        webSettings.setJavaScriptEnabled(true);
+        webSettings.setDomStorageEnabled(true);
+        webSettings.setLoadWithOverviewMode(true);
+        webSettings.setUseWideViewPort(true);
+        webSettings.setBuiltInZoomControls(true);
+        webSettings.setDisplayZoomControls(false);
+        webSettings.setSupportMultipleWindows(false);
+        webSettings.setJavaScriptCanOpenWindowsAutomatically(false);
+        webSettings.setUserAgentString("Mozilla/5.0 (Linux; Android 10) Mobile");
+        webSettings.setMediaPlaybackRequiresUserGesture(false);
+
         webView.setWebViewClient(new WebViewClient() {
-            private boolean isFirstLoad = true;
-            private String originalUrl;
+            private boolean isDownloadStarted = false;
 
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                if (url.contains("savefrom.net") || url.contains("youtube.com") || url.contains("instagram.com")) {
+                    view.loadUrl(url);
+                    return true;
+                }
                 return false;
             }
 
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
+                isDownloadStarted = false;
                 progressBar.setVisibility(View.VISIBLE);
-                progressBar.setProgress(0);
-                statusTextView.setText("Loading...");
-
-                // Save the original URL on first load
-                if (isFirstLoad) {
-                    originalUrl = url;
-                }
+                statusTextView.setText("Preparing download...");
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                progressBar.setVisibility(View.GONE);
-
-                // If this is the first load and we detect an error page or ad
-                if (isFirstLoad && (url.contains("error") || url.contains("ad"))) {
-                    // Reload the original URL
-                    webView.postDelayed(() -> webView.loadUrl(originalUrl), 1000);
-                    isFirstLoad = false;
+                if (!isDownloadStarted) {
+                    injectFinalDownloadScript(view);
                 }
             }
 
             @Override
-            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                super.onReceivedError(view, request, error);
-                // Handle error by reloading
-                if (isFirstLoad && originalUrl != null) {
-                    webView.postDelayed(() -> webView.loadUrl(originalUrl), 1000);
-                    isFirstLoad = false;
+            public void onLoadResource(WebView view, String url) {
+                super.onLoadResource(view, url);
+                if (isValidVideoUrl(url) && !isDownloadStarted) {
+                    isDownloadStarted = true;
+                    startVideoDownload(url, webView.getSettings().getUserAgentString());
                 }
             }
         });
-
-        // Add WebChromeClient to track loading progress
-        webView.setWebChromeClient(new WebChromeClient() {
-            @Override
-            public void onProgressChanged(WebView view, int newProgress) {
-                super.onProgressChanged(view, newProgress);
-                progressBar.setProgress(newProgress);
-                statusTextView.setText("Loading: " + newProgress + "%");
-            }
-        });
-
-        webView.getSettings().setJavaScriptEnabled(true);
-        webView.getSettings().setDomStorageEnabled(true);
-        webView.getSettings().setLoadWithOverviewMode(true);
-        webView.getSettings().setUseWideViewPort(true);
-        webView.setVisibility(View.GONE);
 
         webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
-            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
-            request.setMimeType(mimeType);
-            request.addRequestHeader("User-Agent", userAgent);
-            request.setDescription("Video yüklənir...");
-            request.setTitle(URLUtil.guessFileName(url, contentDisposition, mimeType));
-            request.allowScanningByMediaScanner();
-            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS,
-                    URLUtil.guessFileName(url, contentDisposition, mimeType));
-
-            DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-            long downloadId = dm.enqueue(request);
-            monitorDownloadProgress(downloadId);
-
-            Toast.makeText(getApplicationContext(), "Yükləmə başladı...", Toast.LENGTH_LONG).show();
+            if (isValidVideoUrl(url)) {
+                startVideoDownload(url, userAgent);
+            }
         });
     }
 
+
+    private void injectFinalDownloadScript(WebView view) {
+        String jsCode = "javascript:(function() {" +
+                "try {" +
+                // Check if download button exists
+                "   var downloadBtn = document.querySelector('a[href*=\"download\"], button[onclick*=\"download\"]');" +
+                "   if (downloadBtn) {" +
+                // If download button found, click it
+                "       downloadBtn.click();" +
+                "   } else {" +
+                // Otherwise look for direct video links
+                "       var videoLinks = document.querySelectorAll('a[href*=\"videoplayback\"], a[href*=\"video_redirect\"]');" +
+                "       if (videoLinks.length > 0) {" +
+                "           window.location.href = videoLinks[0].href;" +
+                "       }" +
+                "   }" +
+                "} catch(e) { console.error('Final download error:', e); }" +
+                "})();";
+
+        view.evaluateJavascript(jsCode, null);
+    }
+
+    private void startVideoDownload(String url, String userAgent) {
+        try {
+            // Create unique filename with quality indicator
+            String fileName = "video_720p_" + System.currentTimeMillis() + ".mp4";
+
+            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+            request.setMimeType("video/mp4");
+            request.addRequestHeader("User-Agent", userAgent);
+            request.setTitle(fileName);
+            request.setDescription("Downloading HD video...");
+            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
+            request.setAllowedOverMetered(true);
+            request.setAllowedOverRoaming(true);
+
+            DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+            if (dm != null) {
+                long downloadId = dm.enqueue(request);
+                monitorDownload(downloadId);
+                runOnUiThread(() -> {
+                    Toast.makeText(Downloader.this, "Downloading 720p video...", Toast.LENGTH_LONG).show();
+                    progressBar.setVisibility(View.VISIBLE);
+                });
+            }
+        } catch (Exception e) {
+            runOnUiThread(() -> Toast.makeText(Downloader.this,
+                    "Download error: " + e.getMessage(), Toast.LENGTH_LONG).show());
+        }
+    }
+
+    @SuppressWarnings("Range")
+    private void monitorDownload(long downloadId) {
+        new Thread(() -> {
+            DownloadManager.Query query = new DownloadManager.Query();
+            query.setFilterById(downloadId);
+            DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+
+            boolean downloading = true;
+            while (downloading) {
+                try (Cursor cursor = manager.query(query)) {
+                    if (cursor != null && cursor.moveToFirst()) {
+                        int status = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS));
+                        int bytesDownloaded = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
+                        int bytesTotal = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
+
+                        // Update progress
+                        int progress = bytesTotal > 0 ? (int) ((bytesDownloaded * 100L) / bytesTotal) : 0;
+                        runOnUiThread(() -> {
+                            progressBar.setProgress(progress);
+                            statusTextView.setText("Downloading: " + progress + "%");
+                        });
+
+                        // Check if download completed
+                        if (status == DownloadManager.STATUS_SUCCESSFUL ||
+                                status == DownloadManager.STATUS_FAILED) {
+                            downloading = false;
+                        }
+                    }
+                }
+                try { Thread.sleep(1000); } catch (InterruptedException e) { e.printStackTrace(); }
+            }
+        }).start();
+    }
+
+    private boolean isValidVideoUrl(String url) {
+        if (url == null || url.isEmpty()) return false;
+
+        String lowerUrl = url.toLowerCase();
+        return lowerUrl.matches(".*\\.(mp4|webm|mkv|mov|avi|flv|3gp|m4v)$") ||
+                lowerUrl.contains("googlevideo.com") ||
+                lowerUrl.contains("videoplayback") ||
+                lowerUrl.contains("video_redirect") ||
+                lowerUrl.contains("cdninstagram.com") ||
+                lowerUrl.contains("video") ||
+                lowerUrl.contains("720p") ||
+                lowerUrl.contains("high.quality");
+    }
 
 
     private void pasteLinkFromClipboard() {
@@ -278,49 +371,7 @@ public class Downloader extends AppCompatActivity {
         }
     }
 
-    private void monitorDownloadProgress(long downloadId) {
-        new Thread(() -> {
-            boolean downloading = true;
-            DownloadManager.Query query = new DownloadManager.Query();
-            query.setFilterById(downloadId);
-            DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
 
-            while (downloading) {
-                Cursor cursor = manager.query(query);
-                if (cursor != null && cursor.moveToFirst()) {
-                    int bytesDownloaded = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
-                    int bytesTotal = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
-
-                    if (bytesTotal > 0) {
-                        int progress = (int) ((bytesDownloaded * 100L) / bytesTotal);
-                        runOnUiThread(() -> {
-                            progressBar.setVisibility(View.VISIBLE);
-                            progressBar.setProgress(progress);
-                            statusTextView.setText("Yükləmə: " + progress + "%");
-                        });
-                    }
-
-                    int status = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS));
-                    if (status == DownloadManager.STATUS_SUCCESSFUL || status == DownloadManager.STATUS_FAILED) {
-                        downloading = false;
-                    }
-
-                    cursor.close();
-                }
-
-                try {
-                    Thread.sleep(500);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-
-            runOnUiThread(() -> {
-                progressBar.setProgress(100);
-                statusTextView.setText("Yükləmə tamamlandı");
-            });
-        }).start();
-    }
 
 
     @Override

@@ -17,7 +17,7 @@ import java.net.URLEncoder;
 public class TikTokDownloader extends BaseVideoDownloader {
 
     public TikTokDownloader(ProgressBar progressBar, TextView statusTextView, View downloadButton, Context context, WebView webView) {
-        super(progressBar, statusTextView, downloadButton, context,webView);
+        super(progressBar, statusTextView, downloadButton, context, webView);
     }
 
     @Override
@@ -42,7 +42,6 @@ public class TikTokDownloader extends BaseVideoDownloader {
     }
 
 
-
     @Override
     protected String doInBackground(String... params) {
         String videoUrl = params[0];
@@ -63,10 +62,6 @@ public class TikTokDownloader extends BaseVideoDownloader {
             return "Xəta: " + e.getMessage();
         }
     }
-
-
-
-
 
 
 }

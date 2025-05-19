@@ -41,7 +41,7 @@ dependencies {
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
 
-    implementation ("org.jsoup:jsoup:1.14.3")
+    implementation ("org.jsoup:jsoup:1.20.1")
     implementation ("com.squareup.okhttp3:okhttp:4.9.3")
 
 }

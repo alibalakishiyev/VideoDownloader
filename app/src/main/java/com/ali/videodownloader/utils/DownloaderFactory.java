@@ -6,9 +6,11 @@ import android.webkit.WebView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
+import com.ali.videodownloader.VideoSites.FacebookDownloader;
 import com.ali.videodownloader.VideoSites.GenericDownloader;
 import com.ali.videodownloader.VideoSites.InstagramDownloader;
 import com.ali.videodownloader.VideoSites.PinterestDownloader;
+import com.ali.videodownloader.VideoSites.RedditDownloader;
 import com.ali.videodownloader.VideoSites.RutubeDownloader;
 import com.ali.videodownloader.VideoSites.TikTokDownloader;
 import com.ali.videodownloader.VideoSites.YouTubeDownloader;
@@ -25,6 +27,10 @@ public class DownloaderFactory {
         switch (platform) {
             case "TikTok":
                 return new TikTokDownloader(progressBar, statusTextView, downloadButton, context,webView);
+            case "Facebook":
+                return new FacebookDownloader(progressBar, statusTextView, downloadButton, context,webView);
+            case "Reddit":
+                return new RedditDownloader(progressBar, statusTextView, downloadButton, context,webView);
             case "Instagram":
                 return new InstagramDownloader(progressBar, statusTextView, downloadButton, context,webView);
             case "YouTube":
