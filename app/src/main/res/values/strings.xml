@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">Video Downloader</string>
+    <string-array name="platforms">
+        <item>TikTok</item>
+        <item>Instagram</item>
+        <item>YouTube</item>
+        <item>Pinterest</item>
+        <item>Rutube</item>
+        <item>Diğer</item>
+    </string-array>
+    <string name="please_enter_url">Please enter video URL</string>
+    <string name="link_pasted">Link pasted from clipboard</string>
+    <string name="storage_permission_granted">Storage permission granted</string>
+    <string name="permission_required">Permission Required</string>
+    <string name="storage_permission_message">App needs storage permission to download videos</string>
+    <string name="go_to_settings">Go to Settings</string>
+    <string name="cancel">Cancel</string>
+</resources>
