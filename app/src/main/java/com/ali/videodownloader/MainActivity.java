@@ -17,6 +17,12 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.ali.videodownloader.VideoSites.FacebookDownloader;
+import com.ali.videodownloader.VideoSites.InstagramDownloader;
+import com.ali.videodownloader.VideoSites.RedditDownloader;
+import com.ali.videodownloader.VideoSites.TikTokDownloader;
+import com.ali.videodownloader.VideoSites.WhatsAppStatusDownloader;
+import com.ali.videodownloader.VideoSites.YouTubeDownloader;
 import com.ali.videodownloader.utils.Downloader;
 
 import java.util.ArrayList;
@@ -30,7 +36,17 @@ public class MainActivity extends AppCompatActivity implements AlgoListener {
         setContentView(R.layout.activity_main);
 
         ArrayList<Algo> arrayList = new ArrayList<>();
-        arrayList.add(new Algo(R.drawable.download1, "Downloader", Downloader.class));
+        arrayList.add(new Algo(R.drawable.tiktok, "TikTok"));
+        arrayList.add(new Algo(R.drawable.youtube, "YouTube"));
+        arrayList.add(new Algo(R.drawable.facebook62, "Facebook"));
+        arrayList.add(new Algo(R.drawable.instagram, "Instagram"));
+        arrayList.add(new Algo(R.drawable.whatsapp, "WhatsApp Status"));
+        arrayList.add(new Algo(R.drawable.reddit, "Reddit"));
+        arrayList.add(new Algo(R.drawable.pinterest, "Pinterest"));
+        arrayList.add(new Algo(R.drawable.download1, "Rutor"));
+
+
+
 
 
         AlgoAdapter algoAdapter = new AlgoAdapter(arrayList, this);
@@ -41,10 +57,11 @@ public class MainActivity extends AppCompatActivity implements AlgoListener {
 
     @Override
     public void onAlgoSelected(Algo algo) {
-        Intent intent = new Intent(this, algo.activityClazz);
-        intent.putExtra("name", algo.algoText);
+        Intent intent = new Intent(this, Downloader.class);
+        intent.putExtra("siteName", algo.algoText);
         startActivity(intent);
     }
+
 }
 
 class AlgoAdapter extends RecyclerView.Adapter<AlgoViewHolder> {
@@ -105,17 +122,16 @@ class AlgoViewHolder extends RecyclerView.ViewHolder implements View.OnClickList
     }
 }
 
-class Algo<T> {
-    public int iconResourceId = R.drawable.ic_launcher_foreground;
-    public String algoText = "";
-    public Class<T> activityClazz;
+class Algo {
+    public int iconResourceId;
+    public String algoText;
 
-    public Algo(int iconResourceId, String algoText, Class<T> activityClazz) {
+    public Algo(int iconResourceId, String algoText) {
         this.iconResourceId = iconResourceId;
         this.algoText = algoText;
-        this.activityClazz = activityClazz;
     }
 }
+
 
 interface AlgoListener {
     void onAlgoSelected(Algo algo);
