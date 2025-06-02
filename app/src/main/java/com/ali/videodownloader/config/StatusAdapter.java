@@ -1,10 +1,12 @@
 package com.ali.videodownloader.config;
 
 import android.content.Context;
+import android.content.Intent;
 import android.net.Uri;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.CheckBox;
 import android.widget.ImageView;
 import android.widget.VideoView;
 
@@ -16,16 +18,22 @@ import com.ali.videodownloader.R;
 import com.bumptech.glide.Glide;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 
 public class StatusAdapter extends RecyclerView.Adapter<StatusAdapter.StatusViewHolder> {
 
     private Context context;
     private List<File> mediaFiles;
+    private List<File> selectedFiles = new ArrayList<>();  // Seçilmiş fayllar siyahısı
 
     public StatusAdapter(Context context, List<File> mediaFiles) {
         this.context = context;
         this.mediaFiles = mediaFiles;
+    }
+
+    public List<File> getSelectedFiles() {
+        return selectedFiles;
     }
 
     @NonNull
@@ -39,23 +47,54 @@ public class StatusAdapter extends RecyclerView.Adapter<StatusAdapter.StatusView
     public void onBindViewHolder(@NonNull StatusViewHolder holder, int position) {
         File file = mediaFiles.get(position);
 
+        if (selectedFiles.contains(file)) {
+            holder.itemView.setBackgroundColor(context.getResources().getColor(R.color.pressed_color));
+        } else {
+            holder.itemView.setBackgroundColor(context.getResources().getColor(android.R.color.transparent));
+        }
+
         if (file.getName().endsWith(".jpg")) {
-            // Şəkil faylıdır
             holder.videoView.setVisibility(View.GONE);
             holder.imageView.setVisibility(View.VISIBLE);
-            // Glide ilə şəkili yükləyirik
+            Glide.with(context).load(file).into(holder.imageView);
+        } else if (file.getName().endsWith(".mp4")) {
+            holder.videoView.setVisibility(View.GONE);
+            holder.imageView.setVisibility(View.VISIBLE);
+
             Glide.with(context)
                     .load(file)
+                    .thumbnail(0.1f)
                     .into(holder.imageView);
-        } else if (file.getName().endsWith(".mp4")) {
-            // Video faylıdır
-            holder.imageView.setVisibility(View.GONE);
-            holder.videoView.setVisibility(View.VISIBLE);
-            holder.videoView.setVideoURI(Uri.fromFile(file));
-            holder.videoView.seekTo(1); // Videonun birinci frame-ni göstərmək üçün
-            // İstəyə bağlı olaraq autoplay və ya controls əlavə edə bilərsiniz
+        }
+
+        holder.itemView.setOnClickListener(v -> {
+            if (selectedFiles.contains(file)) {
+                selectedFiles.remove(file);
+                holder.itemView.setBackgroundColor(context.getResources().getColor(android.R.color.transparent));
+            } else {
+                selectedFiles.add(file);
+                holder.itemView.setBackgroundColor(context.getResources().getColor(R.color.pressed_color));
+            }
+        });
+
+        holder.imageView.setOnClickListener(v -> openMediaViewer(file));
+    }
+
+
+    private void openMediaViewer(File file) {
+        if (file.getName().endsWith(".mp4")) {
+            // Video baxmaq üçün yeni aktivitiyə göndər
+            Intent intent = new Intent(context, VideoPlayer.class);
+            intent.putExtra("mediaPath", file.getAbsolutePath());
+            context.startActivity(intent);
+        } else if (file.getName().endsWith(".jpg")) {
+            // Şəkil baxmaq üçün yeni aktivitiyə göndər
+            Intent intent = new Intent(context, ImageViewer.class);
+            intent.putExtra("mediaPath", file.getAbsolutePath());
+            context.startActivity(intent);
         }
     }
+
 
     @Override
     public int getItemCount() {
@@ -73,3 +112,4 @@ public class StatusAdapter extends RecyclerView.Adapter<StatusAdapter.StatusView
         }
     }
 }
+

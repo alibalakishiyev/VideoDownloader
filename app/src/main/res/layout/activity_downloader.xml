@@ -9,65 +9,112 @@
     android:background="@drawable/background1"
     tools:context=".MainActivity">
 
-    <TextView
-        android:id="@+id/textView"
+    <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Video Downloader"
-        android:textAlignment="center"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="16dp"/>
+        android:layout_height="match_parent">
 
-    <EditText
-        android:id="@+id/urlEditText"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Video URL girin"
-        android:inputType="textUri"
-        android:layout_marginBottom="16dp" />
-
-    <Button
-        android:id="@+id/downloadButton"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Yüklə"
-        android:textSize="18sp"
-        android:layout_marginBottom="16dp"/>
-
-    <TextView
-        android:id="@+id/statusTextView"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text=""
-        android:layout_marginBottom="8dp"/>
-
-    <ProgressBar
-        android:id="@+id/progressBar"
-        style="?android:attr/progressBarStyleHorizontal"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:visibility="gone"
-        android:layout_marginBottom="16dp" />
-
-    <!-- Bu container YouTube və WhatsApp görünüşlərini idarə edəcək -->
-    <FrameLayout
-        android:id="@+id/containerLayout"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1">
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/statusRecyclerView"
+        <TextView
+            android:id="@+id/textView"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:visibility="gone" />
+            android:layout_height="wrap_content"
+            android:text="Video Downloader"
+            android:textAlignment="center"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
 
-        <WebView
-            android:id="@+id/webBrowser"
+        <EditText
+            android:id="@+id/urlEditText"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:visibility="gone" />
-    </FrameLayout>
+            android:layout_height="wrap_content"
+            android:background="@color/white"
+            android:hint="Video URL girin"
+            android:inputType="textUri"
+            android:textColor="@color/black"
+            android:textSize="20sp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/textView" />
+
+        <Button
+            android:id="@+id/downloadButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Yüklə"
+            android:textSize="18sp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/urlEditText" />
+
+        <TextView
+            android:id="@+id/statusTextView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text=""
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/progressBar" />
+
+        <ProgressBar
+            android:id="@+id/progressBar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/downloadButton" />
+
+        <FrameLayout
+            android:id="@+id/containerLayout"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_marginTop="8dp"
+            app:layout_constraintBottom_toTopOf="@+id/linearLayout"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/statusTextView">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/statusRecyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone" />
+
+            <WebView
+                android:id="@+id/webBrowser"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="visible" />
+        </FrameLayout>
+
+
+        <LinearLayout
+            android:id="@+id/linearLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="50dp"
+            android:gravity="center"
+            android:orientation="horizontal"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/containerLayout">
+
+            <com.google.android.gms.ads.AdView xmlns:ads="http://schemas.android.com/apk/res-auto"
+                android:id="@+id/adView1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentBottom="true"
+                android:layout_centerHorizontal="true"
+                ads:adSize="BANNER"
+                ads:adUnitId="ca-app-pub-5367924704859976/8045197279" />
+        </LinearLayout>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
 
 </LinearLayout>

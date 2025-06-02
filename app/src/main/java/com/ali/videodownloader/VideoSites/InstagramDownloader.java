@@ -25,7 +25,7 @@ public class InstagramDownloader extends BaseVideoDownloader {
     }
 
     @Override
-    protected String getVideoUrl(String url) throws Exception {
+    public String getVideoUrl(String url) throws Exception {
         // Show savefrom.net in WebView instead of direct download
         final String saveFromUrl = "https://en.savefrom.net/#url=" + url;
 

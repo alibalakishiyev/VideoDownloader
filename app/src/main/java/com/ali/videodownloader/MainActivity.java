@@ -1,5 +1,6 @@
 package com.ali.videodownloader;
 
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -9,6 +10,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.activity.EdgeToEdge;
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
@@ -24,16 +26,23 @@ import com.ali.videodownloader.VideoSites.TikTokDownloader;
 import com.ali.videodownloader.VideoSites.WhatsAppStatusDownloader;
 import com.ali.videodownloader.VideoSites.YouTubeDownloader;
 import com.ali.videodownloader.utils.Downloader;
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.AdView;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity implements AlgoListener {
 
+    private AdView mAdView;
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
 
         ArrayList<Algo> arrayList = new ArrayList<>();
         arrayList.add(new Algo(R.drawable.tiktok, "TikTok"));
@@ -53,7 +62,15 @@ public class MainActivity extends AppCompatActivity implements AlgoListener {
         RecyclerView recyclerView = findViewById(R.id.main_recycler_view);
         recyclerView.setAdapter(algoAdapter);
         recyclerView.setLayoutManager(new GridLayoutManager(this, 2));
+
+        mAdView = findViewById(R.id.adView);
+        AdRequest adRequest = new AdRequest.Builder().build();
+        mAdView.loadAd(adRequest);
+
+        getOnBackPressedDispatcher().addCallback(this, callback);
     }
+
+
 
     @Override
     public void onAlgoSelected(Algo algo) {
@@ -61,6 +78,28 @@ public class MainActivity extends AppCompatActivity implements AlgoListener {
         intent.putExtra("siteName", algo.algoText);
         startActivity(intent);
     }
+
+    OnBackPressedCallback callback = new OnBackPressedCallback(true) {
+        @Override
+        public void handleOnBackPressed() {
+            MaterialAlertDialogBuilder materialAlertDialogBuilder = new MaterialAlertDialogBuilder(MainActivity.this);
+            materialAlertDialogBuilder.setTitle(R.string.app_name);
+            materialAlertDialogBuilder.setMessage("Are you sure want to exit the app?");
+            materialAlertDialogBuilder.setNegativeButton(android.R.string.no, new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int i) {
+                    dialog.dismiss();
+                }
+            });
+            materialAlertDialogBuilder.setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int i) {
+                    finish();
+                }
+            });
+            materialAlertDialogBuilder.show();
+        }
+    };
 
 }
 

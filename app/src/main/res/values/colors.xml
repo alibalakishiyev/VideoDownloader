@@ -11,4 +11,6 @@
     <color name="red">#FF0000</color>
 
     <color name="mainicon">#05D7F2</color>
+    <color name="pressed_color">#8033B5E5</color> <!-- Yarı şəffaf mavi rəng -->
+
 </resources>

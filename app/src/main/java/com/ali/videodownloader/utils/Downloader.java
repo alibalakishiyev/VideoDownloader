@@ -1,47 +1,63 @@
 package com.ali.videodownloader.utils;
 
-import static com.ali.videodownloader.config.PermissionDenied.checkStoragePermission;
 import static com.ali.videodownloader.config.PermissionDenied.initializeDownloader;
-import static com.ali.videodownloader.config.PermissionDenied.requestStoragePermission;
 
 import android.app.DownloadManager;
 import android.content.ClipData;
 import android.content.ClipboardManager;
-import android.content.Context;
+import android.content.ContentValues;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Message;
+import android.provider.MediaStore;
 import android.view.View;
+import android.webkit.URLUtil;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
-import android.widget.AdapterView;
+import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ProgressBar;
-import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.ali.videodownloader.MainActivity;
 import com.ali.videodownloader.R;
-import com.ali.videodownloader.VideoSites.TikTokDownloader;
+import com.ali.videodownloader.VideoSites.InstagramDownloader;
+import com.ali.videodownloader.VideoSites.YouTubeDownloader;
 import com.ali.videodownloader.config.PermissionDenied;
 import com.ali.videodownloader.config.StatusAdapter;
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.AdView;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
 public class Downloader extends AppCompatActivity {
+
     private EditText urlEditText;
     private Button downloadButton;
     private ProgressBar progressBar;
@@ -50,16 +66,24 @@ public class Downloader extends AppCompatActivity {
     private RecyclerView statusRecyclerView;
     private FrameLayout containerLayout;
     private String selectedPlatform;
+    private StatusAdapter adapter;  // adapter-i global elan et
+    private AdView mAdView1;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_downloader);
 
-        // Get selected platform from intent
-        selectedPlatform = getIntent().getStringExtra("siteName");
-
         initializeViews();
+
+        selectedPlatform = getIntent().getStringExtra("siteName");
+        if (selectedPlatform == null) {
+            Toast.makeText(this, "Platform not specified!", Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
+
         setupPlatformSpecificUI();
         pasteLinkFromClipboard();
 
@@ -69,16 +93,18 @@ public class Downloader extends AppCompatActivity {
             PermissionDenied.requestStoragePermission(this);
         }
 
-        selectedPlatform = getIntent().getStringExtra("siteName");
-        if (selectedPlatform == null) {
-            Toast.makeText(this, "Platform not specified!", Toast.LENGTH_LONG).show();
-            finish();
-            return;
-        }
 
 
         setupDownloadButton();
+
+        mAdView1 = findViewById(R.id.adView1);
+        AdRequest adRequest = new AdRequest.Builder().build();
+        mAdView1.loadAd(adRequest);
+
+        getOnBackPressedDispatcher().addCallback(this, callback);
     }
+
+
 
     private void initializeViews() {
         urlEditText = findViewById(R.id.urlEditText);
@@ -92,6 +118,7 @@ public class Downloader extends AppCompatActivity {
         // Initially hide both containers
         webView.setVisibility(View.GONE);
         statusRecyclerView.setVisibility(View.GONE);
+        containerLayout.setVisibility(View.GONE);
     }
 
     private void setupPlatformSpecificUI() {
@@ -103,30 +130,144 @@ public class Downloader extends AppCompatActivity {
     }
 
     private void setupWhatsAppUI() {
-        // Hide URL input for WhatsApp Status
+        // Hide URL input, show RecyclerView for WhatsApp Status
         urlEditText.setVisibility(View.GONE);
         statusRecyclerView.setVisibility(View.VISIBLE);
+        webView.setVisibility(View.GONE);
         containerLayout.setVisibility(View.VISIBLE);
 
         showWhatsAppStatuses();
     }
 
     private void setupWebViewUI() {
-        // Show URL input for web platforms
         urlEditText.setVisibility(View.VISIBLE);
+        statusRecyclerView.setVisibility(View.GONE);
         webView.setVisibility(View.VISIBLE);
         containerLayout.setVisibility(View.VISIBLE);
 
-        // Configure WebView
         WebSettings webSettings = webView.getSettings();
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDomStorageEnabled(true);
+        webSettings.setLoadWithOverviewMode(true);
+        webSettings.setUseWideViewPort(true);
+        webSettings.setAllowFileAccess(true);
+        webSettings.setAllowContentAccess(true);
+        webSettings.setJavaScriptCanOpenWindowsAutomatically(true);
+        webSettings.setSupportMultipleWindows(true);
+
+        // Configure WebViewClient to handle popups and downloads
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                String url = request.getUrl().toString();
+
+                // Intercept SaveFrom.net download links
+                if (url.contains("savefrom.net/download") || url.contains("videodownload")) {
+                    startDownload(url);
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                progressBar.setVisibility(View.VISIBLE);
+                statusTextView.setText("Loading...");
+                downloadButton.setEnabled(false);
+                super.onPageStarted(view, url, favicon);
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                progressBar.setVisibility(View.GONE);
+                statusTextView.setText("Page loaded - select quality and click download");
+                downloadButton.setEnabled(true);
+                super.onPageFinished(view, url);
+
+                // Inject JavaScript to help with SaveFrom.net
+                injectSaveFromHelper();
+            }
+        });
+
+        // Enable popup windows
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onCreateWindow(WebView view, boolean isDialog,
+                                          boolean isUserGesture, Message resultMsg) {
+                WebView newWebView = new WebView(Downloader.this);
+                newWebView.setWebViewClient(new WebViewClient() {
+                    @Override
+                    public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                        if (url.contains("savefrom.net/download")) {
+                            startDownload(url);
+                            return true;
+                        }
+                        return false;
+                    }
+                });
+
+                WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
+                transport.setWebView(newWebView);
+                resultMsg.sendToTarget();
+                return true;
+            }
+        });
+
+        // Enable downloads from WebView
+        webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
+            startDownload(url);
+        });
+    }
+
+
+    private void injectSaveFromHelper() {
+        String jsCode = "javascript:(function() {" +
+                "var downloadBtns = document.querySelectorAll('a[href*=\"download\"], button[onclick*=\"download\"]');" +
+                "downloadBtns.forEach(function(btn) {" +
+                "   btn.setAttribute('onclick', 'window.open(this.href); return false;');" +
+                "});" +
+                "})()";
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            webView.evaluateJavascript(jsCode, null);
+        } else {
+            webView.loadUrl(jsCode);
+        }
+    }
+
+    private void startDownload(String url) {
+        try {
+            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+            request.setTitle("Video Download");
+            request.setDescription("Downloading from " + selectedPlatform);
+            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+
+            String fileName = "video_" + System.currentTimeMillis() +
+                    (url.contains(".mp4") ? ".mp4" :
+                            url.contains(".webm") ? ".webm" : ".mp4");
+            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
+
+            DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+            if (dm != null) {
+                dm.enqueue(request);
+                Toast.makeText(this, "Download started", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Download service unavailable", Toast.LENGTH_SHORT).show();
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, "Download error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
 
     private void showWhatsAppStatuses() {
+        // Check both old and new WhatsApp status directories
         File statusDir = new File(Environment.getExternalStorageDirectory() + "/WhatsApp/Media/.Statuses");
-        if (statusDir.exists() && statusDir.isDirectory()) {
-            File[] statusFiles = statusDir.listFiles();
+        File newStatusDir = new File(Environment.getExternalStorageDirectory() + "/Android/media/com.whatsapp/WhatsApp/Media/.Statuses");
+
+        File targetDir = statusDir.exists() ? statusDir : newStatusDir;
+
+        if (targetDir.exists() && targetDir.isDirectory()) {
+            File[] statusFiles = targetDir.listFiles();
             if (statusFiles != null && statusFiles.length > 0) {
                 List<File> mediaList = new ArrayList<>();
                 for (File file : statusFiles) {
@@ -135,79 +276,95 @@ public class Downloader extends AppCompatActivity {
                     }
                 }
 
-                statusRecyclerView.setLayoutManager(new LinearLayoutManager(this));
-                StatusAdapter adapter = new StatusAdapter(this, mediaList);
-                statusRecyclerView.setAdapter(adapter);
-            } else {
-                Toast.makeText(this, "No statuses found", Toast.LENGTH_SHORT).show();
+
+                if (!mediaList.isEmpty()) {
+                    statusRecyclerView.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false));
+                    adapter = new StatusAdapter(this, mediaList);
+                    statusRecyclerView.setAdapter(adapter);
+                    return;
+                }
             }
-        } else {
-            Toast.makeText(this, "WhatsApp status folder not found", Toast.LENGTH_SHORT).show();
         }
+        Toast.makeText(this, "No WhatsApp statuses found", Toast.LENGTH_SHORT).show();
     }
+
+
+
 
     private void setupDownloadButton() {
         downloadButton.setOnClickListener(v -> {
+            String videoUrl = urlEditText.getText().toString().trim();
+
             if ("WhatsApp Status".equals(selectedPlatform)) {
-                setupWhatsAppUI();
-            } else if (selectedPlatform != null) {
-                setupWebViewUI();
-            } else {
-                Toast.makeText(this, "No platform selected", Toast.LENGTH_SHORT).show();
-                finish(); // fəaliyyətin davam etməsinin qarşısını al
+                // WhatsApp Status seçilibsə, seçilmiş statusları yüklə
+                if (adapter == null) {
+                    Toast.makeText(this, "Status adapter hazır deyil", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                List<File> selectedFiles = adapter.getSelectedFiles();
+
+                if (selectedFiles.isEmpty()) {
+                    Toast.makeText(this, "Heç bir status seçilməyib", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                for (File file : selectedFiles) {
+                    Toast.makeText(this, "Fayil Secildi", Toast.LENGTH_SHORT).show();
+                }
+                return;
             }
 
-
-            String videoUrl = urlEditText.getText().toString().trim();
             if (videoUrl.isEmpty()) {
                 Toast.makeText(this, "Please enter video URL", Toast.LENGTH_SHORT).show();
                 return;
             }
 
             progressBar.setVisibility(View.VISIBLE);
-            statusTextView.setText("Starting download...");
+            statusTextView.setText("Preparing download...");
             downloadButton.setEnabled(false);
 
-            new Thread(() -> {
+            // Platform yoxlaması
+            if ("YouTube".equalsIgnoreCase(selectedPlatform) ||
+                    "Instagram".equalsIgnoreCase(selectedPlatform) ||
+                    "Facebook".equalsIgnoreCase(selectedPlatform)) {
+
+                setupWebViewUI();
+
+                YouTubeDownloader youTubeDownloader = new YouTubeDownloader(
+                        progressBar,
+                        statusTextView,
+                        downloadButton,
+                        this,
+                        webView
+                );
+                InstagramDownloader instagramDownloader = new InstagramDownloader(
+                        progressBar,
+                        statusTextView,
+                        downloadButton,
+                        this,
+                        webView
+                );
+
                 try {
-                    BaseVideoDownloader downloader = DownloaderFactory.createDownloader(
-                            selectedPlatform,
-                            progressBar,
-                            statusTextView,
-                            downloadButton,
-                            this,
-                            webView
-                    );
-
-                    String result = downloader.execute(videoUrl).get();
-
-                    runOnUiThread(() -> {
-                        progressBar.setVisibility(View.GONE);
-                        downloadButton.setEnabled(true);
-                        handleDownloadResult(result);
-                    });
-
+                    youTubeDownloader.getVideoUrl(videoUrl);
+                    instagramDownloader.getVideoUrl(videoUrl);
                 } catch (Exception e) {
-                    runOnUiThread(() -> {
-                        progressBar.setVisibility(View.GONE);
-                        downloadButton.setEnabled(true);
-                        statusTextView.setText("Error: " + e.getMessage());
-                        Toast.makeText(this, "Download failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                    });
+                    statusTextView.setText("Error: " + e.getMessage());
+                    Toast.makeText(this, "Error processing video: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    downloadButton.setEnabled(true);
                 }
-            }).start();
+
+            } else {
+                // Digər platformalar üçün
+                setupWebViewUI();
+                webView.loadUrl(videoUrl);
+            }
         });
     }
 
-    private void handleDownloadResult(String result) {
-        if (result != null && result.startsWith("Error")) {
-            statusTextView.setText(result);
-            Toast.makeText(this, result, Toast.LENGTH_LONG).show();
-        } else if (result != null) {
-            statusTextView.setText(result);
-            Toast.makeText(this, result, Toast.LENGTH_SHORT).show();
-        }
-    }
+
+
 
     private void pasteLinkFromClipboard() {
         if (selectedPlatform.equals("WhatsApp Status")) return;
@@ -236,4 +393,27 @@ public class Downloader extends AppCompatActivity {
             }
         }
     }
+
+    OnBackPressedCallback callback = new OnBackPressedCallback(true) {
+        @Override
+        public void handleOnBackPressed() {
+            MaterialAlertDialogBuilder materialAlertDialogBuilder = new MaterialAlertDialogBuilder(Downloader.this);
+            materialAlertDialogBuilder.setTitle(R.string.app_name);
+            materialAlertDialogBuilder.setMessage("Are you sure want to exit the app?");
+            materialAlertDialogBuilder.setNegativeButton(android.R.string.no, new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int i) {
+                    dialog.dismiss();
+                }
+            });
+            materialAlertDialogBuilder.setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int i) {
+                    startActivity(new Intent(getApplicationContext(), MainActivity.class));
+                    finish();
+                }
+            });
+            materialAlertDialogBuilder.show();
+        }
+    };
 }

@@ -40,6 +40,8 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
+    implementation("com.google.android.gms:play-services-ads-lite:24.0.0")
+
 
     implementation ("org.jsoup:jsoup:1.20.1")
     implementation ("com.squareup.okhttp3:okhttp:4.9.3")

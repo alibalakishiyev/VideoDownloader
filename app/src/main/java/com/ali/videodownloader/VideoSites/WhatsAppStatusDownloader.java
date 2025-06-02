@@ -1,13 +1,20 @@
 package com.ali.videodownloader.VideoSites;
 
+import android.app.Activity;
+import android.content.ContentValues;
 import android.content.Context;
+import android.content.Intent;
 import android.database.Cursor;
+import android.media.MediaScannerConnection;
 import android.net.Uri;
+import android.os.Environment;
 import android.provider.MediaStore;
 import android.view.View;
+import android.webkit.MimeTypeMap;
 import android.webkit.WebView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.ali.videodownloader.utils.BaseVideoDownloader;
 
@@ -15,6 +22,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.channels.FileChannel;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -23,7 +31,8 @@ import java.util.Locale;
 public class WhatsAppStatusDownloader extends BaseVideoDownloader {
 
     private static final String STATUS_DIRECTORY = "/Android/media/com.whatsapp/WhatsApp/Media/.Statuses";
-    private static final String SAVE_DIRECTORY = "/WhatsApp Statuses";
+    private static final String SAVE_DIRECTORY = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/WhatsApp Statuses";
+    private File selectedStatusFile;
 
     public WhatsAppStatusDownloader(ProgressBar progressBar, TextView statusTextView,
                                     View downloadButton, Context context, WebView webView) {
@@ -38,102 +47,63 @@ public class WhatsAppStatusDownloader extends BaseVideoDownloader {
 
     @Override
     protected String doInBackground(String... params) {
-        // Əvvəlcə fayl sistemi ilə yoxlayır
-        String result = downloadStatusesFromFiles();
-
-        // Əgər status tapılmazsa MediaStore ilə yoxla
-        if (result.equals("No statuses found") || result.equals("No video statuses found")) {
-            result = downloadStatusesMediaStore();
+        if (selectedStatusFile == null) {
+            return "No status selected";
         }
 
-        return result;
+        return saveStatusToGallery(selectedStatusFile);
     }
 
-    private String downloadStatusesFromFiles() {
-        try {
-            File statusDir = new File(context.getExternalFilesDir(null).getParent() + STATUS_DIRECTORY);
-            File saveDir = new File(context.getExternalFilesDir(null).getParent() + SAVE_DIRECTORY);
+    public void setSelectedStatusFile(File statusFile) {
+        this.selectedStatusFile = statusFile;
+    }
 
+    private String saveStatusToGallery(File statusFile) {
+        try {
+            File saveDir = new File(SAVE_DIRECTORY);
             if (!saveDir.exists() && !saveDir.mkdirs()) {
                 return "Error creating save directory";
             }
 
-            File[] statusFiles = statusDir.listFiles();
-            if (statusFiles == null || statusFiles.length == 0) {
-                return "No statuses found";
+            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+                    .format(new Date(statusFile.lastModified()));
+
+            String destFileName = "WA_STATUS_" + timestamp + "_" + statusFile.getName();
+            File destFile = new File(saveDir, destFileName);
+
+            if (copyFile(statusFile, destFile)) {
+                // Mediascan işlədərək qalereyada görünməsini təmin et
+                scanMediaFile(destFile);
+                return "Status saved to gallery";
+            } else {
+                return "Failed to save status";
             }
-
-            int downloadedCount = 0;
-            for (File statusFile : statusFiles) {
-                if (isVideoFile(statusFile)) {
-                    String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
-                            .format(new Date(statusFile.lastModified()));
-
-                    String destFileName = "WA_STATUS_" + timestamp + "_" + statusFile.getName();
-                    File destFile = new File(saveDir, destFileName);
-
-                    if (copyFile(statusFile, destFile)) {
-                        downloadedCount++;
-                    }
-                }
-            }
-
-            return downloadedCount > 0 ? "Downloaded " + downloadedCount + " statuses" : "No video statuses found";
-
         } catch (Exception e) {
             return "Error: " + e.getMessage();
         }
     }
 
-    private String downloadStatusesMediaStore() {
-        try {
-            Uri uri = MediaStore.Files.getContentUri("external");
-            String[] projection = {MediaStore.Files.FileColumns.DATA};
-            String selection = MediaStore.Files.FileColumns.DATA + " LIKE ?";
-            String[] selectionArgs = new String[]{"%WhatsApp/Media/.Statuses%"};
+    private void scanMediaFile(File file) {
+        MediaScannerConnection.scanFile(
+                context,
+                new String[]{file.getAbsolutePath()},
+                new String[]{getMimeType(file)},
+                (path, uri) -> {
+                    // Fayl skan edildikdən sonra
+                    ((Activity) context).runOnUiThread(() -> {
+                        Toast.makeText(context, "Status saved to gallery", Toast.LENGTH_SHORT).show();
 
-            Cursor cursor = context.getContentResolver().query(
-                    uri,
-                    projection,
-                    selection,
-                    selectionArgs,
-                    null
-            );
+                        // Qalereyanı yenilə
+                        context.sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE,
+                                Uri.fromFile(file)));
+                    });
 
-            if (cursor == null) {
-                return "Error accessing statuses";
-            }
+                });
+    }
 
-            File saveDir = new File(context.getExternalFilesDir(null).getParent() + SAVE_DIRECTORY);
-            if (!saveDir.exists() && !saveDir.mkdirs()) {
-                cursor.close();
-                return "Error creating save directory";
-            }
-
-            int downloadedCount = 0;
-            while (cursor.moveToNext()) {
-                String path = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA));
-                File sourceFile = new File(path);
-
-                if (isVideoFile(sourceFile)) {
-                    String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
-                            .format(new Date(sourceFile.lastModified()));
-
-                    String destFileName = "WA_STATUS_" + timestamp + "_" + sourceFile.getName();
-                    File destFile = new File(saveDir, destFileName);
-
-                    if (copyFile(sourceFile, destFile)) {
-                        downloadedCount++;
-                    }
-                }
-            }
-            cursor.close();
-
-            return downloadedCount > 0 ? "Downloaded " + downloadedCount + " statuses" : "No video statuses found";
-
-        } catch (Exception e) {
-            return "Error: " + e.getMessage();
-        }
+    private String getMimeType(File file) {
+        String extension = MimeTypeMap.getFileExtensionFromUrl(file.getAbsolutePath());
+        return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.toLowerCase());
     }
 
     private boolean isVideoFile(File file) {
@@ -147,5 +117,24 @@ public class WhatsAppStatusDownloader extends BaseVideoDownloader {
             destChannel.transferFrom(sourceChannel, 0, sourceChannel.size());
             return true;
         }
+    }
+
+    // Status fayllarını tapmaq üçün metod
+    public File[] getStatusFiles() {
+        File statusDir = new File(Environment.getExternalStorageDirectory() + STATUS_DIRECTORY);
+        if (!statusDir.exists()) {
+            // Yeni WhatsApp qovluq strukturuna bax
+            statusDir = new File(Environment.getExternalStorageDirectory() +
+                    "/Android/media/com.whatsapp/WhatsApp/Media/.Statuses");
+        }
+
+        if (statusDir.exists() && statusDir.isDirectory()) {
+            return statusDir.listFiles(file ->
+                    file.getName().endsWith(".mp4") ||
+                            file.getName().endsWith(".3gp") ||
+                            file.getName().endsWith(".jpg") ||
+                            file.getName().endsWith(".jpeg"));
+        }
+        return new File[0];
     }
 }
