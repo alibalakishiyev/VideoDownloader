@@ -26,7 +26,7 @@ public class PinterestDownloader extends BaseVideoDownloader {
     }
 
     @Override
-    protected String getVideoUrl(String url) throws Exception {
+    public String getVideoUrl(String url) throws Exception {
         try {
             // First ensure we have a proper Pinterest URL
             if (!url.contains("pinterest.com") && !url.contains("pin.it")) {

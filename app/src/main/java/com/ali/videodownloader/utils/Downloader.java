@@ -40,6 +40,8 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.ali.videodownloader.MainActivity;
 import com.ali.videodownloader.R;
 import com.ali.videodownloader.VideoSites.InstagramDownloader;
+import com.ali.videodownloader.VideoSites.PinterestDownloader;
+import com.ali.videodownloader.VideoSites.TikTokDownloader;
 import com.ali.videodownloader.VideoSites.YouTubeDownloader;
 import com.ali.videodownloader.config.PermissionDenied;
 import com.ali.videodownloader.config.StatusAdapter;
@@ -124,9 +126,16 @@ public class Downloader extends AppCompatActivity {
     private void setupPlatformSpecificUI() {
         if (selectedPlatform.equals("WhatsApp Status")) {
             setupWhatsAppUI();
-        } else {
-            setupWebViewUI();
+        } else if(selectedPlatform.equals("TikTok")){
+            setupOtherAppUI();
         }
+    }
+
+    private void setupOtherAppUI(){
+        statusRecyclerView.setVisibility(View.VISIBLE);
+        webView.setVisibility(View.GONE);
+        containerLayout.setVisibility(View.GONE);
+
     }
 
     private void setupWhatsAppUI() {
@@ -235,27 +244,52 @@ public class Downloader extends AppCompatActivity {
         }
     }
 
-    private void startDownload(String url) {
+    // Improved download method
+    private void startDownload(String downloadUrl) {
         try {
-            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(downloadUrl));
             request.setTitle("Video Download");
             request.setDescription("Downloading from " + selectedPlatform);
             request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+            request.setAllowedOverMetered(true);
+            request.setAllowedOverRoaming(true);
 
-            String fileName = "video_" + System.currentTimeMillis() +
-                    (url.contains(".mp4") ? ".mp4" :
-                            url.contains(".webm") ? ".webm" : ".mp4");
-            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
+            // Generate proper filename based on platform
+            String fileName = selectedPlatform.toLowerCase() + "_" + System.currentTimeMillis();
+            if (downloadUrl.contains(".mp4")) {
+                fileName += ".mp4";
+            } else if (downloadUrl.contains(".webm")) {
+                fileName += ".webm";
+            } else {
+                fileName += ".mp4"; // default extension
+            }
+
+            request.setDestinationInExternalPublicDir(
+                    Environment.DIRECTORY_DOWNLOADS,
+                    fileName
+            );
 
             DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
             if (dm != null) {
                 dm.enqueue(request);
-                Toast.makeText(this, "Download started", Toast.LENGTH_SHORT).show();
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Download started", Toast.LENGTH_SHORT).show();
+                    statusTextView.setText("Download in progress...");
+                    downloadButton.setEnabled(true);
+                });
             } else {
-                Toast.makeText(this, "Download service unavailable", Toast.LENGTH_SHORT).show();
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Download service unavailable", Toast.LENGTH_SHORT).show();
+                    statusTextView.setText("Download failed");
+                    downloadButton.setEnabled(true);
+                });
             }
         } catch (Exception e) {
-            Toast.makeText(this, "Download error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            runOnUiThread(() -> {
+                Toast.makeText(this, "Download error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                statusTextView.setText("Error: " + e.getMessage());
+                downloadButton.setEnabled(true);
+            });
         }
     }
 
@@ -320,9 +354,82 @@ public class Downloader extends AppCompatActivity {
                 return;
             }
 
+            progressBar.setProgress(0);
             progressBar.setVisibility(View.VISIBLE);
             statusTextView.setText("Preparing download...");
             downloadButton.setEnabled(false);
+
+            // Handle TikTok downloads
+            if ("TikTok".equals(selectedPlatform)) {
+                new Thread(() -> {
+                    try {
+                        TikTokDownloader tikTokDownloader = new TikTokDownloader(
+                                progressBar,
+                                statusTextView,
+                                downloadButton,
+                                Downloader.this,
+                                webView
+                        );
+
+                        // Extract video URL from TikTok link
+                        String downloadUrl = tikTokDownloader.getVideoUrl(videoUrl);
+
+                        runOnUiThread(() -> {
+                            if (downloadUrl != null && !downloadUrl.isEmpty()) {
+                                startDownload(downloadUrl);
+                                progressBar.setVisibility(View.GONE);
+                            } else {
+                                statusTextView.setText("Failed to extract TikTok video URL");
+                                downloadButton.setEnabled(true);
+                            }
+                        });
+                    } catch (Exception e) {
+                        runOnUiThread(() -> {
+                            statusTextView.setText("Error: " + e.getMessage());
+                            Toast.makeText(Downloader.this, "Error processing TikTok video", Toast.LENGTH_LONG).show();
+                            downloadButton.setEnabled(true);
+                        });
+                    }
+                }).start();
+                return;
+            }
+
+            // Handle Pinterest downloads
+            if ("Pinterest".equals(selectedPlatform)) {
+                new Thread(() -> {
+                    try {
+                        PinterestDownloader pinterestDownloader = new PinterestDownloader(
+                                progressBar,
+                                statusTextView,
+                                downloadButton,
+                                Downloader.this,
+                                webView
+                        );
+
+                        // Extract video URL from Pinterest link
+                        String downloadUrl = pinterestDownloader.getVideoUrl(videoUrl);
+
+                        runOnUiThread(() -> {
+                            if (downloadUrl != null && !downloadUrl.isEmpty()) {
+                                startDownload(downloadUrl);
+                                progressBar.setVisibility(View.GONE);
+
+                            } else {
+                                statusTextView.setText("Failed to extract Pinterest video URL");
+                                downloadButton.setEnabled(true);
+                            }
+                        });
+                    } catch (Exception e) {
+                        runOnUiThread(() -> {
+                            statusTextView.setText("Error: " + e.getMessage());
+                            Toast.makeText(Downloader.this, "Error processing Pinterest video", Toast.LENGTH_LONG).show();
+                            downloadButton.setEnabled(true);
+                        });
+                    }
+                }).start();
+                return;
+            }
+
 
             // Platform yoxlaması
             if ("YouTube".equalsIgnoreCase(selectedPlatform) ||
@@ -355,11 +462,8 @@ public class Downloader extends AppCompatActivity {
                     downloadButton.setEnabled(true);
                 }
 
-            } else {
-                // Digər platformalar üçün
-                setupWebViewUI();
-                webView.loadUrl(videoUrl);
             }
+
         });
     }
 
