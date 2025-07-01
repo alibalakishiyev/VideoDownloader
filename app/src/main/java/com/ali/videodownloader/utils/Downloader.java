@@ -8,6 +8,7 @@ import android.content.ClipboardManager;
 import android.content.ContentValues;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.media.MediaScannerConnection;
@@ -17,6 +18,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Message;
 import android.provider.MediaStore;
+import android.util.Log;
 import android.view.View;
 import android.webkit.URLUtil;
 import android.webkit.WebChromeClient;
@@ -170,8 +172,10 @@ public class Downloader extends AppCompatActivity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString();
 
-                // Intercept SaveFrom.net download links
+                // SaveFrom.net və digər endirmə linkləri
                 if (url.contains("savefrom.net/download") || url.contains("videodownload")) {
+                    String videoName = extractVideoName(url);
+                    Toast.makeText(Downloader.this, "Preparing: " + videoName, Toast.LENGTH_SHORT).show();
                     startDownload(url);
                     return true;
                 }
@@ -247,22 +251,17 @@ public class Downloader extends AppCompatActivity {
     // Improved download method
     private void startDownload(String downloadUrl) {
         try {
+            String videoName = extractVideoName(downloadUrl); // Yeni metod
+
             DownloadManager.Request request = new DownloadManager.Request(Uri.parse(downloadUrl));
-            request.setTitle("Video Download");
+            request.setTitle(videoName); // Video adını istifadə et
             request.setDescription("Downloading from " + selectedPlatform);
             request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
             request.setAllowedOverMetered(true);
             request.setAllowedOverRoaming(true);
 
-            // Generate proper filename based on platform
-            String fileName = selectedPlatform.toLowerCase() + "_" + System.currentTimeMillis();
-            if (downloadUrl.contains(".mp4")) {
-                fileName += ".mp4";
-            } else if (downloadUrl.contains(".webm")) {
-                fileName += ".webm";
-            } else {
-                fileName += ".mp4"; // default extension
-            }
+            // Fayl adını yaxşılaşdır
+            String fileName = generateFileName(videoName, downloadUrl);
 
             request.setDestinationInExternalPublicDir(
                     Environment.DIRECTORY_DOWNLOADS,
@@ -271,12 +270,15 @@ public class Downloader extends AppCompatActivity {
 
             DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
             if (dm != null) {
-                dm.enqueue(request);
+                long downloadId = dm.enqueue(request);
                 runOnUiThread(() -> {
-                    Toast.makeText(this, "Download started", Toast.LENGTH_SHORT).show();
-                    statusTextView.setText("Download in progress...");
+                    Toast.makeText(this, "Downloading: " + videoName, Toast.LENGTH_SHORT).show();
+                    statusTextView.setText("Downloading: " + videoName);
                     downloadButton.setEnabled(true);
                 });
+
+                // Download ID-ni qeyd et (istəyə bağlı)
+                saveDownloadReference(downloadId, videoName, fileName);
             } else {
                 runOnUiThread(() -> {
                     Toast.makeText(this, "Download service unavailable", Toast.LENGTH_SHORT).show();
@@ -320,6 +322,140 @@ public class Downloader extends AppCompatActivity {
             }
         }
         Toast.makeText(this, "No WhatsApp statuses found", Toast.LENGTH_SHORT).show();
+    }
+
+    private String extractVideoName(String downloadUrl) {
+        try {
+            // SaveFrom.net linkləri üçün
+            if (downloadUrl.contains("savefrom.net")) {
+                int startIndex = downloadUrl.indexOf("url=");
+                if (startIndex > 0) {
+                    startIndex += 4;
+                    String originalUrl = downloadUrl.substring(startIndex);
+                    if (originalUrl.contains("&")) {
+                        originalUrl = originalUrl.substring(0, originalUrl.indexOf("&"));
+                    }
+                    return getVideoNameFromUrl(originalUrl);
+                }
+            }
+
+            // Birbaşa video linkləri üçün
+            return getVideoNameFromUrl(downloadUrl);
+
+        } catch (Exception e) {
+            Log.e("Downloader", "Error extracting video name", e);
+            return selectedPlatform + "_Video_" + System.currentTimeMillis();
+        }
+    }
+
+    private String generateFileName(String videoName, String downloadUrl) {
+        try {
+            // Xüsusi simvolları təmizlə və maksimum uzunluq təyin et
+            String cleanName = videoName.replaceAll("[^a-zA-Z0-9-_.]", "_");
+            if (cleanName.length() > 100) {
+                cleanName = cleanName.substring(0, 100);
+            }
+
+            // Fayl uzantısını avtomatik təyin et
+            String extension = ".mp4"; // standart
+
+            if (downloadUrl.contains(".mp4")) {
+                extension = ".mp4";
+            } else if (downloadUrl.contains(".webm")) {
+                extension = ".webm";
+            } else if (downloadUrl.contains(".mkv")) {
+                extension = ".mkv";
+            } else if (downloadUrl.contains(".mov")) {
+                extension = ".mov";
+            } else if (downloadUrl.contains(".avi")) {
+                extension = ".avi";
+            }
+
+            return cleanName + extension;
+        } catch (Exception e) {
+            Log.e("Downloader", "Error generating filename", e);
+            return "video_" + System.currentTimeMillis() + ".mp4";
+        }
+    }
+
+
+    private void saveDownloadReference(long downloadId, String videoName, String fileName) {
+        try {
+            SharedPreferences preferences = getSharedPreferences("DownloadHistory", MODE_PRIVATE);
+            SharedPreferences.Editor editor = preferences.edit();
+
+            // Yeni download ID əlavə et
+            String downloads = preferences.getString("download_ids", "");
+            editor.putString("download_ids", downloads + downloadId + ",");
+
+            // Download məlumatlarını saxla
+            editor.putString("name_" + downloadId, videoName);
+            editor.putString("file_" + downloadId, fileName);
+            editor.putLong("time_" + downloadId, System.currentTimeMillis());
+
+            editor.apply();
+
+            // Media scanner-ı işə sal (fayl galeridə görünsün)
+            MediaScannerConnection.scanFile(this,
+                    new String[]{Environment.getExternalStoragePublicDirectory(
+                            Environment.DIRECTORY_DOWNLOADS) + "/" + fileName},
+                    null,
+                    (path, uri) -> {
+                        // Scan tamamlandıqda
+                    });
+        } catch (Exception e) {
+            Log.e("Downloader", "Error saving download reference", e);
+        }
+    }
+
+    private String getVideoNameFromUrl(String videoUrl) {
+        try {
+            // YouTube linkləri
+            if (videoUrl.contains("youtube.com/watch") || videoUrl.contains("youtu.be/")) {
+                String videoId = "";
+                if (videoUrl.contains("v=")) {
+                    videoId = videoUrl.substring(videoUrl.indexOf("v=") + 2);
+                    if (videoId.contains("&")) {
+                        videoId = videoId.substring(0, videoId.indexOf("&"));
+                    }
+                } else if (videoUrl.contains("youtu.be/")) {
+                    videoId = videoUrl.substring(videoUrl.indexOf("youtu.be/") + 9);
+                    if (videoId.contains("?")) {
+                        videoId = videoId.substring(0, videoId.indexOf("?"));
+                    }
+                }
+                return "YouTube_" + videoId;
+            }
+
+            // Instagram linkləri
+            if (videoUrl.contains("instagram.com")) {
+                if (videoUrl.contains("/p/")) {
+                    String postId = videoUrl.substring(videoUrl.indexOf("/p/") + 3);
+                    if (postId.contains("/")) {
+                        postId = postId.substring(0, postId.indexOf("/"));
+                    }
+                    return "Instagram_" + postId;
+                }
+            }
+
+            // Facebook linkləri
+            if (videoUrl.contains("facebook.com")) {
+                if (videoUrl.contains("/videos/")) {
+                    String videoId = videoUrl.substring(videoUrl.indexOf("/videos/") + 8);
+                    if (videoId.contains("/") || videoId.contains("?")) {
+                        videoId = videoId.split("[/?]")[0];
+                    }
+                    return "Facebook_" + videoId;
+                }
+            }
+
+            // Ümumi fayl adı formatı
+            return "Video_" + System.currentTimeMillis();
+
+        } catch (Exception e) {
+            Log.e("Downloader", "Error extracting video name from URL", e);
+            return "Downloaded_Video_" + System.currentTimeMillis();
+        }
     }
 
 

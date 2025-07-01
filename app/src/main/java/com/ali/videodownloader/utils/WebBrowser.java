@@ -1,6 +1,9 @@
 package com.ali.videodownloader.utils;
 
+import android.content.DialogInterface;
+import android.content.Intent;
 import android.os.Bundle;
+import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.webkit.CookieManager;
 import android.webkit.WebSettings;
@@ -8,17 +11,21 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.ali.videodownloader.MainActivity;
 import com.ali.videodownloader.R;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 public class WebBrowser extends AppCompatActivity {
 
     private WebView webView;
     private EditText urlEditText;
-    private Button goButton;
+    private ImageButton backBtn;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -28,7 +35,7 @@ public class WebBrowser extends AppCompatActivity {
         // View'ları bağla
         webView = findViewById(R.id.webView);
         urlEditText = findViewById(R.id.urlEditText);
-        goButton = findViewById(R.id.goButton);
+        backBtn = findViewById(R.id.goButton);
 
         // WebView ayarları
         setupWebView();
@@ -36,8 +43,14 @@ public class WebBrowser extends AppCompatActivity {
         // Varsayılan olarak YouTube'u yükle
         loadUrl("https://www.youtube.com");
 
-        // Go butonu click listener
-        goButton.setOnClickListener(v -> loadUrlFromInput());
+        backBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(WebBrowser.this , MainActivity.class);
+                startActivity(intent);
+
+            }
+        });
 
         // Klavyeden GO tuşu ile gönderme
         urlEditText.setOnEditorActionListener((v, actionId, event) -> {
@@ -47,6 +60,8 @@ public class WebBrowser extends AppCompatActivity {
             }
             return false;
         });
+
+        getOnBackPressedDispatcher().addCallback(this, callback);
     }
 
     private void setupWebView() {
@@ -94,4 +109,28 @@ public class WebBrowser extends AppCompatActivity {
             super.onBackPressed();
         }
     }
+
+
+    OnBackPressedCallback callback = new OnBackPressedCallback(true) {
+        @Override
+        public void handleOnBackPressed() {
+            MaterialAlertDialogBuilder materialAlertDialogBuilder = new MaterialAlertDialogBuilder(WebBrowser.this);
+            materialAlertDialogBuilder.setTitle(R.string.app_name);
+            materialAlertDialogBuilder.setMessage("Are you sure want to exit the app?");
+            materialAlertDialogBuilder.setNegativeButton(android.R.string.no, new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int i) {
+                    dialog.dismiss();
+                }
+            });
+            materialAlertDialogBuilder.setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int i) {
+                    startActivity(new Intent(getApplicationContext(), MainActivity.class));
+                    finish();
+                }
+            });
+            materialAlertDialogBuilder.show();
+        }
+    };
 }
