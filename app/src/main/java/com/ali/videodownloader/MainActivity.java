@@ -26,6 +26,7 @@ import com.ali.videodownloader.VideoSites.TikTokDownloader;
 import com.ali.videodownloader.VideoSites.WhatsAppStatusDownloader;
 import com.ali.videodownloader.VideoSites.YouTubeDownloader;
 import com.ali.videodownloader.utils.Downloader;
+import com.ali.videodownloader.utils.WebBrowser;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.AdView;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -53,6 +54,7 @@ public class MainActivity extends AppCompatActivity implements AlgoListener {
         arrayList.add(new Algo(R.drawable.reddit, "Reddit"));
         arrayList.add(new Algo(R.drawable.pinterest, "Pinterest"));
         arrayList.add(new Algo(R.drawable.download1, "Rutor"));
+        arrayList.add(new Algo(R.drawable.explorer62, "WebBrowser"));
 
 
 
@@ -72,11 +74,19 @@ public class MainActivity extends AppCompatActivity implements AlgoListener {
 
 
 
+
     @Override
     public void onAlgoSelected(Algo algo) {
-        Intent intent = new Intent(this, Downloader.class);
-        intent.putExtra("siteName", algo.algoText);
-        startActivity(intent);
+        if ("WebBrowser".equals(algo.algoText)) {
+            // WebBrowser seçildiğinde özel activity'yi başlat
+            Intent intent = new Intent(this, WebBrowser.class);
+            startActivity(intent);
+        } else {
+            // Diğer seçenekler için mevcut işlem
+            Intent intent = new Intent(this, Downloader.class);
+            intent.putExtra("siteName", algo.algoText);
+            startActivity(intent);
+        }
     }
 
     OnBackPressedCallback callback = new OnBackPressedCallback(true) {
